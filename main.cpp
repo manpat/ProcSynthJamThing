@@ -207,28 +207,30 @@ int main(){
 	// chord(cmin, 1, 12+6.0);
 	// chord(cmin, 4, 12+9.0);
 
-	sched.repeat = 10.0;
+	sched.repeat = 7.0;
 
 	// Bass
 	for(float x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%3)-1.5);
 		auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
 		sched.Add(freq, x, 1.0);
-		sched.Add(freq, x, 1.0);
-		sched.Add(freq, x, 0.1);
+		sched.Add(freq, x, 0.25);
+		sched.Add(freq*2, x, 1.0);
 		sched.Add(freq*2, x, 1.0);
 	}
 
 	// Mid
 	for(float x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%4)-3.0);
-		sched.Add(penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, -1.0), x, 0.1);
+		auto freq = penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, -1.0);
+		sched.Add(freq, x, 0.3);
+		sched.Add(freq, x, 0.3);
 	}
 
 	// Treb
 	for(float x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%4)-4.0);
-		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1);
+		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%2)-2.0));
 	}
 
 	// for(int i = 0; i <= 14; i++){
