@@ -1,8 +1,9 @@
-#include <iostream>
-#include <cassert>
-#include <cmath>
-#include <vector>
 #include <algorithm>
+#include <iostream>
+#include <cstdint>
+#include <cassert>
+#include <vector>
+#include <cmath>
 
 #include <fmod.hpp>
 #include <fmod_errors.h>
@@ -11,30 +12,35 @@
 
 using std::cout; using std::endl;
 
+using u32 = uint32_t;
+using s32 = int32_t;
+using f32 = float;
+using f64 = double;
+
 struct NoteTimePair {
-	float freq;
-	float begin;
-	float length;
+	f32 freq;
+	f32 begin;
+	f32 length;
 };
 
 // Returns frequency of note offset from A
-constexpr float ntof(float n){
+constexpr f32 ntof(f32 n){
 	return 220.f * std::pow(2.f, n/12.f);
 }
 
 struct Schedule {
 	std::vector<NoteTimePair> notes;
-	float time = 0.0f;
-	float repeat = 0.0f;
+	f32 time = 0.0f;
+	f32 repeat = 0.0f;
 	bool dirty = false;
 
-	void Add(float freq, float when, float length = 1.0f){
+	void Add(f32 freq, f32 when, f32 length = 1.0f){
 		if(when+length < time) return;
 
 		notes.push_back(NoteTimePair{freq, when, length});
 	}
 
-	void Update(float dt){
+	void Update(f32 dt){
 		time += dt;
 		if(repeat > 0.0) time = std::fmod(time, repeat);
 	}
@@ -54,9 +60,9 @@ enum Notes {
 };
 
 struct Scale {
-	std::vector<int> degrees;
+	std::vector<s32> degrees;
 
-	void Major(int root = Notes::A){
+	void Major(s32 root = Notes::A){
 		degrees.push_back(root); root += 2;
 		degrees.push_back(root); root += 2;
 		degrees.push_back(root); root += 1;
@@ -66,7 +72,7 @@ struct Scale {
 		degrees.push_back(root); root += 1;
 	}
 
-	void Minor(int root = Notes::A){
+	void Minor(s32 root = Notes::A){
 		degrees.push_back(root); root += 2;
 		degrees.push_back(root); root += 1;
 		degrees.push_back(root); root += 2;
@@ -76,7 +82,7 @@ struct Scale {
 		degrees.push_back(root); root += 2;
 	}
 
-	void Idk(int root = Notes::A){
+	void Idk(s32 root = Notes::A){
 		degrees.push_back(root); root += 2;
 		degrees.push_back(root); root += 1;
 		degrees.push_back(root); root += 2;
@@ -86,7 +92,7 @@ struct Scale {
 		degrees.push_back(root); root += 2;
 	}
 
-	void Penta(int root = Notes::A){
+	void Penta(s32 root = Notes::A){
 		degrees.push_back(root); root += 3;
 		degrees.push_back(root); root += 2;
 		degrees.push_back(root); root += 2;
@@ -94,9 +100,9 @@ struct Scale {
 		degrees.push_back(root); root += 2;
 	}
 
-	float Get(int degree){
+	f32 Get(s32 degree){
 		auto idx = degree;
-		int octave = 0;
+		s32 octave = 0;
 		while(idx < 0) {--octave; idx += degrees.size();}
 		octave += idx/degrees.size();
 		idx %= degrees.size();
@@ -107,22 +113,22 @@ struct Scale {
 };
 
 namespace Wave {
-	float sin(double phase){
+	f32 sin(f64 phase){
 		return std::sin(2.0*M_PI*phase);
 	}
 
-	float saw(double phase){
+	f32 saw(f64 phase){
 		return fmod(phase, 2.0)-1.0;
 	}
 
-	float sqr(double phase, double width){
+	f32 sqr(f64 phase, f64 width){
 		auto nph = fmod(phase, 1.0);
 		if(nph < width) return -1.0;
 
 		return 1.0;
 	}
 
-	float tri(double phase){
+	f32 tri(f64 phase){
 		auto nph = fmod(phase, 1.0);
 		if(nph <= 0.5) return (nph-0.25)*4.0;
 
@@ -137,9 +143,9 @@ void InitFmod();
 struct vec3 {
 	union {
 		struct {
-			float x, y, z;
+			f32 x, y, z;
 		};
-		float v[3];
+		f32 v[3];
 	};
 
 	operator FMOD_VECTOR() const {
@@ -160,7 +166,7 @@ Scale penta;
 Scale scale;
 Schedule sched;
 
-int main(){
+s32 main(s32, char**){
 	SDL_Init(SDL_INIT_EVERYTHING);
 	auto sdlWindow = SDL_CreateWindow("FMOD Test",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -184,7 +190,7 @@ int main(){
 	// sched.Add(ntof(10), 9.0);
 	// sched.Add(ntof(15), 9.0);
 
-	// auto chord = [&](auto& scale, int root, float when){
+	// auto chord = [&](auto& scale, s32 root, f32 when){
 	// 	sched.Add(scale.Get(root+0), when+0.0, 3.0);
 	// 	sched.Add(scale.Get(root+2), when+0.1, 3.0);
 	// 	sched.Add(scale.Get(root+4), when+0.2, 3.0);
@@ -204,7 +210,7 @@ int main(){
 	sched.repeat = 7.0;
 
 	// Bass
-	for(float x = 0.0; x < sched.repeat;){
+	for(f32 x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%3)-1.5);
 		auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
 		sched.Add(freq, x, 1.0);
@@ -214,7 +220,7 @@ int main(){
 	}
 
 	// Mid
-	for(float x = 0.0; x < sched.repeat;){
+	for(f32 x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%4)-3.0);
 		auto freq = penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, -1.0);
 		sched.Add(freq, x, 0.3);
@@ -222,13 +228,13 @@ int main(){
 	}
 
 	// Treb
-	for(float x = 0.0; x < sched.repeat;){
+	for(f32 x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%4)-4.0);
 		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%2)-2.0));
 	}
 
 	bool running = true;
-	// double t = 0.0;
+	// f64 t = 0.0;
 
 	while(running){
 		SDL_Event e;
@@ -242,9 +248,9 @@ int main(){
 
 		fmodSystem->update();
 		
-		// constexpr float dist = 6.f;
+		// constexpr f32 dist = 6.f;
 		// t += 0.000003;
-		// vec3 pos = vec3{(float)cos(t)*(float)(dist + sin(t*0.3)*dist*0.5f), 0.f, (float)sin(t)*(float)(dist + sin(t*0.3)*dist*0.5f)};
+		// vec3 pos = vec3{(f32)cos(t)*(f32)(dist + sin(t*0.3)*dist*0.5f), 0.f, (f32)sin(t)*(f32)(dist + sin(t*0.3)*dist*0.5f)};
 		// cfmod(fmodSystem->set3DListenerAttributes(0, (FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, (FMOD_VECTOR*)&forward, (FMOD_VECTOR*)&up));
 		// cfmod(channel->set3DAttributes((FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, nullptr));
 	}
@@ -270,12 +276,12 @@ int main(){
 */
 struct DSPUserdata {
 	Schedule& sched;
-	double phase;
+	f64 phase;
 };
 
 FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state, 
-	float* inbuffer, float* outbuffer, uint length, 
-	int inchannels, int* outchannels){
+	f32* inbuffer, f32* outbuffer, u32 length, 
+	s32 inchannels, s32* outchannels){
 
 	assert(*outchannels >= 2);
 
@@ -284,18 +290,18 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 	void* ud = nullptr;
 	cfmod(thisdsp->getUserData(&ud));
 
-	int samplerate = 0;
+	s32 samplerate = 0;
 	cfmod(dsp_state->callbacks->getsamplerate(dsp_state, &samplerate));
-	double inc = 1.0/samplerate;
+	f64 inc = 1.0/samplerate;
 
 	auto dud = static_cast<DSPUserdata*>(ud);
 	auto& sched = dud->sched;
 	auto& phase = dud->phase;
 
-	constexpr float attack = 0.1;
+	constexpr f32 attack = 0.1;
 	
-	for(uint i = 0; i < length; i++){
-		float out = 0.f;
+	for(u32 i = 0; i < length; i++){
+		f32 out = 0.f;
 		
 		sched.PlayNotes([&](NoteTimePair& n){
 			auto env = (sched.time-n.begin)/n.length;
@@ -305,7 +311,7 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 				env = (1.0-env)/(1.0-attack);
 			}
 
-			float o = 0.0;
+			f32 o = 0.0;
 			o += Wave::sin(n.freq*phase*0.5) * env;
 			o += Wave::sin(n.freq*phase) * env;
 			o += Wave::sin((n.freq)*phase+0.3) * env;
@@ -326,7 +332,7 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 void InitFmod(){
 	cfmod(FMOD::System_Create(&fmodSystem));
 
-	uint version = 0;
+	u32 version = 0;
 	cfmod(fmodSystem->getVersion(&version));
 	if(version < FMOD_VERSION){
 		std::cerr 
@@ -344,7 +350,7 @@ void InitFmod(){
 		FMOD_DSP_DESCRIPTION desc;
 		memset(&desc, 0, sizeof(desc));
 
-		strncpy(desc.name, "Fuckyou", sizeof(desc.name));
+		// strncpy(desc.name, "Fuckyou", sizeof(desc.name));
 		desc.numinputbuffers = 0;
 		desc.numoutputbuffers = 1;
 		desc.read = DSPCallback;
