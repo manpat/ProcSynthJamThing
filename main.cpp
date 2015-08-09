@@ -19,6 +19,7 @@ using f64 = double;
 
 struct NoteTimePair {
 	f32 freq;
+	f32 volume;
 	f32 begin;
 	f32 length;
 };
@@ -30,14 +31,13 @@ constexpr f32 ntof(f32 n){
 
 struct Schedule {
 	std::vector<NoteTimePair> notes;
-	f32 time = 0.0f;
+	f64 time = 0.0f;
 	f32 repeat = 0.0f;
-	bool dirty = false;
 
-	void Add(f32 freq, f32 when, f32 length = 1.0f){
+	void Add(f32 freq, f32 when, f32 length = 1.0f, f32 volume = 1.0f){
 		if(when+length < time) return;
 
-		notes.push_back(NoteTimePair{freq, when, length});
+		notes.push_back(NoteTimePair{freq, volume, when, length});
 	}
 
 	void Update(f32 dt){
@@ -132,7 +132,7 @@ namespace Wave {
 		auto nph = fmod(phase, 1.0);
 		if(nph <= 0.5) return (nph-0.25)*4.0;
 
-		return (1.0-nph -0.25)*4.0;
+		return (0.75-nph)*4.0;
 	}
 }
 
@@ -165,6 +165,7 @@ Scale amin;
 Scale penta;
 Scale scale;
 Schedule sched;
+Schedule perc;
 
 s32 main(s32, char**){
 	SDL_Init(SDL_INIT_EVERYTHING);
@@ -207,31 +208,33 @@ s32 main(s32, char**){
 	// chord(amin, 1, 12+6.0);
 	// chord(amin, 4, 12+9.0);
 
-	sched.repeat = 60.0;
+	sched.repeat = 8.0;
+
+	// Kick
+	perc.repeat = 1.0;
+	perc.Add(50.0, 0.0, 0.05, 3.0);
 
 	// Bass
 	for(f32 x = 0.0; x < sched.repeat;){
 		x += std::pow(2.0, (rand()%2));
 		auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
-		sched.Add(freq, x, 1.0);
-		// sched.Add(freq, x, 0.25);
-		sched.Add(freq*2, x+0.25, 0.2);
-		// sched.Add(freq*4, x+0.5, 0.2);
-		// sched.Add(freq*2, x, 1.0);
+		sched.Add(freq, x, 2.0/3.0, 4.0);
+		sched.Add(freq*0.5, x+0.75, 2.0/3.0, 4.0);
 	}
 
 	// Mid
 	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%4)-2.0+0.5);
-		auto freq = penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, 0.0);
-		sched.Add(freq, x, 0.3);
-		sched.Add(freq, x, 0.3);
+		x += std::pow(2.0, (rand()%4)-2.0);
+		auto freq = penta.Get(rand()%(penta.degrees.size()*2));
+		sched.Add(freq, x, 0.3, 2.0);
 	}
 
 	// Treb
 	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%6)-3.0);
-		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%3)-2.0));
+		x += std::pow(2.0, (rand()%5)-2.0);
+		auto freq = penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0);
+		auto length = 0.1 * std::pow(2.0, (rand()%4)-2.0);
+		sched.Add(freq, x, length);
 	}
 
 	bool running = true;
@@ -276,7 +279,7 @@ s32 main(s32, char**){
 	                                       
 */
 struct DSPUserdata {
-	Schedule& sched;
+	// Schedule& sched;
 	f64 phase;
 };
 
@@ -296,15 +299,15 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 	f64 inc = 1.0/samplerate;
 
 	auto dud = static_cast<DSPUserdata*>(ud);
-	auto& sched = dud->sched;
+	// auto& sched = dud->sched;
 	auto& phase = dud->phase;
 
-	constexpr f32 attack = 0.1;
-	
 	for(u32 i = 0; i < length; i++){
 		f32 out = 0.f;
 		
 		sched.PlayNotes([&](NoteTimePair& n){
+			constexpr f32 attack = 0.1;
+			
 			auto env = (sched.time-n.begin)/n.length;
 			if(env < attack){
 				env /= attack;
@@ -312,18 +315,39 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 				env = (1.0-env)/(1.0-attack);
 			}
 
+			env *= n.volume;
+
 			f32 o = 0.0;
-			o += Wave::sin(n.freq*phase*0.5) * env;
+			// o += Wave::sin(n.freq*phase*0.5) * env * 0.2;
 			o += Wave::tri(n.freq*phase) * env;
-			o += Wave::tri((n.freq)*phase+0.3) * env;
+			o += Wave::tri((n.freq + 0.1)*phase) * env;
 			out += o/3.0;
 		});
 
+		perc.PlayNotes([&](NoteTimePair& n){
+			constexpr f32 attack = 0.1;
+
+			auto env = (perc.time-n.begin)/n.length;
+			if(env < attack){
+				env /= attack;
+			}else{
+				env = (1.0-env)/(1.0-attack);
+			}
+
+			env *= n.volume;
+
+			f32 o = 0;
+			o += Wave::sin(n.freq*phase) * env;
+			o += Wave::tri(n.freq*phase) * env;
+			out += o;
+		});
+
 		outbuffer[i**outchannels+0] = out;
-		// outbuffer[i**outchannels+1] = Wave::sin(110.0*phase)*0.2f;
+		outbuffer[i**outchannels+1] = out;
 
 		phase += inc;
-		sched.Update(inc * 90.0 /60.0);
+		sched.Update(inc/60.0* 120.0);
+		perc.Update(inc/60.0* 120.0);
 	}
 
 	return FMOD_OK;
@@ -355,7 +379,7 @@ void InitFmod(){
 		desc.numinputbuffers = 0;
 		desc.numoutputbuffers = 1;
 		desc.read = DSPCallback;
-		desc.userdata = new DSPUserdata{sched, 0.0};
+		desc.userdata = new DSPUserdata{/*sched, */0.0};
 
 		cfmod(fmodSystem->createDSP(&desc, &dsp));
 		cfmod(dsp->setChannelFormat(FMOD_CHANNELMASK_STEREO,2,FMOD_SPEAKERMODE_STEREO));
@@ -372,7 +396,7 @@ void InitFmod(){
 	cfmod(fmodSystem->getMasterChannelGroup(&mastergroup));
 	cfmod(mastergroup->addDSP(0, compressor));
 	cfmod(fmodSystem->playDSP(dsp, mastergroup, false, &channel));
-	cfmod(channel->setMode(FMOD_3D));
+	cfmod(channel->setMode(FMOD_2D));
 
 	FMOD::Reverb3D* reverb;
 	cfmod(fmodSystem->createReverb3D(&reverb));
@@ -380,7 +404,7 @@ void InitFmod(){
 	// http://www.fmod.org/docs/content/generated/FMOD_REVERB_PROPERTIES.html
 
 	FMOD_REVERB_PROPERTIES rprops = {
-		7000.0, //1500.0, /* Reverberation decay time in ms */
+		1000.0, //1500.0, /* Reverberation decay time in ms */
 		10.0, //7.0, /* Initial reflection delay time */
 		11.0, //11.0, /* Late reverberation delay time relative to initial reflection */
 		5000.0, /* Reference high frequency (hz) */
@@ -394,5 +418,5 @@ void InitFmod(){
 		-5.0, //-6.0, /* Room effect level (at mid frequencies) */
 	};
 
-	cfmod(reverb->setProperties(&rprops));
+	// cfmod(reverb->setProperties(&rprops));
 }
