@@ -17,14 +17,15 @@ struct NoteTimePair {
 	float length;
 };
 
+// Returns frequency of note offset from A
 constexpr float ntof(float n){
 	return 220.f * std::pow(2.f, n/12.f);
 }
 
 struct Schedule {
 	std::vector<NoteTimePair> notes;
-	double time = 0.0f; // TODO: Separate time and phase. Repeat causes pop with phase
-	double repeat = 0.0f;
+	float time = 0.0f;
+	float repeat = 0.0f;
 	bool dirty = false;
 
 	void Add(float freq, float when, float length = 1.0f){
@@ -41,56 +42,56 @@ struct Schedule {
 	template<typename Func>
 	void PlayNotes(Func f){
 		for(auto& n: notes){
-			if(n.begin > time) continue;
-			if((n.begin+n.length) < time) continue;
+			if(n.begin >= time) continue;
+			if((n.begin+n.length) <= time) continue;
 			f(n);
 		}
 	}
 };
 
+enum Notes {
+	A = 0, As, B, C, Cs, D, Ds, E, F, Fs, G, Gs
+};
+
 struct Scale {
 	std::vector<int> degrees;
 
-	void Major(int root){
-		auto d = 0;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
+	void Major(int root = Notes::A){
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
 	}
 
-	void Minor(int root){
-		auto d = 0;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
+	void Minor(int root = Notes::A){
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
 	}
 
-	void Idk(int root){
-		auto d = 0;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 1;
-		degrees.push_back(root + d); d += 2;
+	void Idk(int root = Notes::A){
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 1;
+		degrees.push_back(root); root += 2;
 	}
 
-	void Penta(int root){
-		auto d = 0;
-		degrees.push_back(root + d); d += 3;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 2;
-		degrees.push_back(root + d); d += 3;
-		degrees.push_back(root + d); d += 2;
+	void Penta(int root = Notes::A){
+		degrees.push_back(root); root += 3;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 2;
+		degrees.push_back(root); root += 3;
+		degrees.push_back(root); root += 2;
 	}
 
 	float Get(int degree){
@@ -153,8 +154,8 @@ static void cfmod(FMOD_RESULT result) {
 	}
 }
 
-Scale cmaj;
-Scale cmin;
+Scale amaj;
+Scale amin;
 Scale penta;
 Scale scale;
 Schedule sched;
@@ -168,17 +169,10 @@ int main(){
 
 	InitFmod();
 
-	// vec3 forward{0, 0, 1.0f};
-	// vec3 up{0, 1.0f, 0};
-	// vec3 vel{0, 0, 0};
-
-	cmaj.Major(0);
-	cmin.Minor(0);
-	penta.Penta(0);
-	scale.Idk(0);
-
-	bool running = true;
-	double t = 0.0;
+	amaj.Major();
+	amin.Minor();
+	penta.Penta();
+	scale.Idk();
 	// sched.time = 11.0;
 	// sched.Add(ntof(-12), 0.0, 8.0);
 	// sched.Add(ntof(0), 1.0);
@@ -197,15 +191,15 @@ int main(){
 	// 	sched.Add(scale.Get(root+6), when+0.3, 3.0);
 	// };
 
-	// chord(cmaj, 0, 0.0);
-	// chord(cmaj, 3, 3.0);
-	// chord(cmaj, 1, 6.0);
-	// chord(cmaj, 4, 9.0);
+	// chord(amaj, 0, 0.0);
+	// chord(amaj, 3, 3.0);
+	// chord(amaj, 1, 6.0);
+	// chord(amaj, 4, 9.0);
 
-	// chord(cmin, 0, 12+0.0);
-	// chord(cmin, 3, 12+3.0);
-	// chord(cmin, 1, 12+6.0);
-	// chord(cmin, 4, 12+9.0);
+	// chord(amin, 0, 12+0.0);
+	// chord(amin, 3, 12+3.0);
+	// chord(amin, 1, 12+6.0);
+	// chord(amin, 4, 12+9.0);
 
 	sched.repeat = 7.0;
 
@@ -233,11 +227,8 @@ int main(){
 		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%2)-2.0));
 	}
 
-	// for(int i = 0; i <= 14; i++){
-	// 	auto j = (i > 7)?(14-i):i;
-
-	// 	sched.Add(cmin.Get(j), i*0.25);
-	// }
+	bool running = true;
+	// double t = 0.0;
 
 	while(running){
 		SDL_Event e;
@@ -252,7 +243,7 @@ int main(){
 		fmodSystem->update();
 		
 		// constexpr float dist = 6.f;
-		t += 0.000003;
+		// t += 0.000003;
 		// vec3 pos = vec3{(float)cos(t)*(float)(dist + sin(t*0.3)*dist*0.5f), 0.f, (float)sin(t)*(float)(dist + sin(t*0.3)*dist*0.5f)};
 		// cfmod(fmodSystem->set3DListenerAttributes(0, (FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, (FMOD_VECTOR*)&forward, (FMOD_VECTOR*)&up));
 		// cfmod(channel->set3DAttributes((FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, nullptr));
@@ -277,6 +268,11 @@ int main(){
 	                                       
 	                                       
 */
+struct DSPUserdata {
+	Schedule& sched;
+	double phase;
+};
+
 FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state, 
 	float* inbuffer, float* outbuffer, uint length, 
 	int inchannels, int* outchannels){
@@ -292,41 +288,34 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 	cfmod(dsp_state->callbacks->getsamplerate(dsp_state, &samplerate));
 	double inc = 1.0/samplerate;
 
-	auto& sched = *static_cast<Schedule*>(ud);
-	double& phase = sched.time;
+	auto dud = static_cast<DSPUserdata*>(ud);
+	auto& sched = dud->sched;
+	auto& phase = dud->phase;
+
+	constexpr float attack = 0.1;
 	
 	for(uint i = 0; i < length; i++){
-		double out = 0.f;
-		// if(std::fmod(phase, 0.5) > 0.25){
-		// 	auto a = Wave::sqr(220.0*phase, 0.5);
-		// 	auto b = Wave::sqr(110.0*phase, 0.5);
-
-		// 	out += a + b;
-		// }
-
-		constexpr double attack = 0.1;
-
+		float out = 0.f;
+		
 		sched.PlayNotes([&](NoteTimePair& n){
-			auto env = (phase-n.begin)/n.length;
+			auto env = (sched.time-n.begin)/n.length;
 			if(env < attack){
 				env /= attack;
 			}else{
 				env = (1.0-env)/(1.0-attack);
 			}
 
-			double o = 0.0;
+			float o = 0.0;
 			o += Wave::sin(n.freq*phase*0.5) * env;
 			o += Wave::sin(n.freq*phase) * env;
 			o += Wave::sin((n.freq)*phase+0.3) * env;
 			out += o/3.0;
 		});
-		// auto c = Wave::sin( 55.0*phase);
-		// auto d = Wave::sqr( 55.0*phase, 0.5);
-		// out += c + d;
 
 		outbuffer[i**outchannels+0] = out;
 		// outbuffer[i**outchannels+1] = Wave::sin(110.0*phase)*0.2f;
-		// phase += inc;
+
+		phase += inc;
 		sched.Update(inc);
 	}
 
@@ -359,7 +348,7 @@ void InitFmod(){
 		desc.numinputbuffers = 0;
 		desc.numoutputbuffers = 1;
 		desc.read = DSPCallback;
-		desc.userdata = &sched;
+		desc.userdata = new DSPUserdata{sched, 0.0};
 
 		cfmod(fmodSystem->createDSP(&desc, &dsp));
 		cfmod(dsp->setChannelFormat(FMOD_CHANNELMASK_STEREO,2,FMOD_SPEAKERMODE_STEREO));
