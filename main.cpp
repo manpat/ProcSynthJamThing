@@ -207,30 +207,31 @@ s32 main(s32, char**){
 	// chord(amin, 1, 12+6.0);
 	// chord(amin, 4, 12+9.0);
 
-	sched.repeat = 7.0;
+	sched.repeat = 60.0;
 
 	// Bass
 	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%3)-1.5);
+		x += std::pow(2.0, (rand()%2));
 		auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
 		sched.Add(freq, x, 1.0);
-		sched.Add(freq, x, 0.25);
-		sched.Add(freq*2, x, 1.0);
-		sched.Add(freq*2, x, 1.0);
+		// sched.Add(freq, x, 0.25);
+		sched.Add(freq*2, x+0.25, 0.2);
+		// sched.Add(freq*4, x+0.5, 0.2);
+		// sched.Add(freq*2, x, 1.0);
 	}
 
 	// Mid
 	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%4)-3.0);
-		auto freq = penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, -1.0);
+		x += std::pow(2.0, (rand()%4)-2.0+0.5);
+		auto freq = penta.Get(rand()%(penta.degrees.size()*2)) * std::pow(2.0, 0.0);
 		sched.Add(freq, x, 0.3);
 		sched.Add(freq, x, 0.3);
 	}
 
 	// Treb
 	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%4)-4.0);
-		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%2)-2.0));
+		x += std::pow(2.0, (rand()%6)-3.0);
+		sched.Add(penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0), x, 0.1 * std::pow(2.0, (rand()%3)-2.0));
 	}
 
 	bool running = true;
@@ -313,8 +314,8 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 
 			f32 o = 0.0;
 			o += Wave::sin(n.freq*phase*0.5) * env;
-			o += Wave::sin(n.freq*phase) * env;
-			o += Wave::sin((n.freq)*phase+0.3) * env;
+			o += Wave::tri(n.freq*phase) * env;
+			o += Wave::tri((n.freq)*phase+0.3) * env;
 			out += o/3.0;
 		});
 
@@ -322,7 +323,7 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 		// outbuffer[i**outchannels+1] = Wave::sin(110.0*phase)*0.2f;
 
 		phase += inc;
-		sched.Update(inc);
+		sched.Update(inc * 90.0 /60.0);
 	}
 
 	return FMOD_OK;
@@ -379,7 +380,7 @@ void InitFmod(){
 	// http://www.fmod.org/docs/content/generated/FMOD_REVERB_PROPERTIES.html
 
 	FMOD_REVERB_PROPERTIES rprops = {
-		20000.0, //1500.0, /* Reverberation decay time in ms */
+		7000.0, //1500.0, /* Reverberation decay time in ms */
 		10.0, //7.0, /* Initial reflection delay time */
 		11.0, //11.0, /* Late reverberation delay time relative to initial reflection */
 		5000.0, /* Reference high frequency (hz) */
