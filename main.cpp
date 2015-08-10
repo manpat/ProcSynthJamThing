@@ -33,6 +33,7 @@ struct Schedule {
 	std::vector<NoteTimePair> notes;
 	f64 time = 0.0f;
 	f32 repeat = 0.0f;
+	s32 numRepeats = 0;
 
 	void Add(f32 freq, f32 when, f32 length = 1.0f, f32 volume = 1.0f){
 		if(when+length < time) return;
@@ -42,7 +43,12 @@ struct Schedule {
 
 	void Update(f32 dt){
 		time += dt;
-		if(repeat > 0.0) time = std::fmod(time, repeat);
+		if(repeat > 0.0) {
+			if(time >= repeat){
+				++numRepeats;
+				time = std::fmod(time, repeat);
+			}
+		}
 	}
 
 	template<typename Func>
@@ -164,8 +170,8 @@ Scale amaj;
 Scale amin;
 Scale penta;
 Scale scale;
-Schedule sched;
-Schedule perc;
+Schedule sched{};
+Schedule perc{};
 
 s32 main(s32, char**){
 	SDL_Init(SDL_INIT_EVERYTHING);
@@ -208,37 +214,53 @@ s32 main(s32, char**){
 	// chord(amin, 1, 12+6.0);
 	// chord(amin, 4, 12+9.0);
 
-	sched.repeat = 8.0;
+	// sched.repeat = 16.0;
+	sched.repeat = 17.0/4.0;
+	perc.repeat = 8.0;
 
 	// Kick
-	perc.repeat = 1.0;
-	perc.Add(50.0, 0.0, 0.05, 3.0);
-
-	// Bass
-	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%2));
-		auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
-		sched.Add(freq, x, 2.0/3.0, 4.0);
-		sched.Add(freq*0.5, x+0.75, 2.0/3.0, 4.0);
+	for(f32 x = 0.0; x < perc.repeat; x+= 1.0){
+		perc.Add(50.0, x, 0.05, 10.0);
 	}
 
-	// Mid
-	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%4)-2.0);
-		auto freq = penta.Get(rand()%(penta.degrees.size()*2));
-		sched.Add(freq, x, 0.3, 2.0);
+	for(f32 x = 1.0; x < perc.repeat; x+= 2.0){
+		perc.Add(1500.0, x, 0.01, 1.0);
 	}
+	perc.Add(1500.0, 7.75, 0.01, 1.0);
 
-	// Treb
-	for(f32 x = 0.0; x < sched.repeat;){
-		x += std::pow(2.0, (rand()%5)-2.0);
-		auto freq = penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0);
-		auto length = 0.1 * std::pow(2.0, (rand()%4)-2.0);
-		sched.Add(freq, x, length);
-	}
+	auto gen = [&](){
+		sched.notes.clear();
+
+		// Bass
+		for(f32 x = 0.0; x < sched.repeat;){
+			x += std::pow(2.0, (rand()%2));
+			auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
+			sched.Add(freq, x, 2.0/3.0, 4.0);
+			sched.Add(freq*0.5, x+0.75, 2.0/3.0, 4.0);
+		}
+
+		// Mid
+		for(f32 x = 0.0; x < sched.repeat;){
+			x += std::pow(2.0, (rand()%4)-2.0);
+			auto freq = penta.Get(rand()%(penta.degrees.size()*2));
+			auto length = 0.3 * std::pow(2.0, (rand()%3)-1.0);
+			sched.Add(freq, x, length, 2.0);
+		}
+
+		// // Treb
+		for(f32 x = 0.0; x < sched.repeat;){
+			x += std::pow(2.0, (rand()%5)-2.0);
+			auto freq = penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0);
+			auto length = 0.1 * std::pow(2.0, (rand()%4)-2.0);
+			sched.Add(freq, x, length);
+			sched.Add(freq, x+1.0/4.0, length);
+			// sched.Add(freq, x+2.0/4.0, length);
+		}		
+	};
+
+	gen();
 
 	bool running = true;
-	// f64 t = 0.0;
 
 	while(running){
 		SDL_Event e;
@@ -251,12 +273,13 @@ s32 main(s32, char**){
 		}
 
 		fmodSystem->update();
-		
-		// constexpr f32 dist = 6.f;
-		// t += 0.000003;
-		// vec3 pos = vec3{(f32)cos(t)*(f32)(dist + sin(t*0.3)*dist*0.5f), 0.f, (f32)sin(t)*(f32)(dist + sin(t*0.3)*dist*0.5f)};
-		// cfmod(fmodSystem->set3DListenerAttributes(0, (FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, (FMOD_VECTOR*)&forward, (FMOD_VECTOR*)&up));
-		// cfmod(channel->set3DAttributes((FMOD_VECTOR*)&pos, (FMOD_VECTOR*)&vel, nullptr));
+
+		if(sched.numRepeats >= 4){
+			gen();
+			sched.numRepeats = 0;
+		}
+
+		SDL_Delay(10);
 	}
 
 	fmodSystem->release();
@@ -279,7 +302,6 @@ s32 main(s32, char**){
 	                                       
 */
 struct DSPUserdata {
-	// Schedule& sched;
 	f64 phase;
 };
 
@@ -299,39 +321,54 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 	f64 inc = 1.0/samplerate;
 
 	auto dud = static_cast<DSPUserdata*>(ud);
-	// auto& sched = dud->sched;
 	auto& phase = dud->phase;
 
 	for(u32 i = 0; i < length; i++){
 		f32 out = 0.f;
 		
-		sched.PlayNotes([&](NoteTimePair& n){
+		sched.PlayNotes([&](const NoteTimePair& n){
 			constexpr f32 attack = 0.1;
 			
-			auto env = (sched.time-n.begin)/n.length;
-			if(env < attack){
-				env /= attack;
+			auto pos = (sched.time-n.begin)/n.length;
+			f32 env;
+			if(pos < attack){
+				env = pos/attack;
 			}else{
-				env = (1.0-env)/(1.0-attack);
+				env = (1.0-pos)/(1.0-attack);
 			}
 
 			env *= n.volume;
 
 			f32 o = 0.0;
 			// o += Wave::sin(n.freq*phase*0.5) * env * 0.2;
+			o += Wave::sin(n.freq*phase*2.0) * env;
+
+			if(n.freq >= ntof(0)){
+				o += Wave::saw(n.freq*phase*0.5) * env;
+				// o += Wave::saw(n.freq*phase*0.501) * env;
+				// o += Wave::saw(n.freq*phase*0.502) * env;
+				// o += Wave::saw(n.freq*phase*0.503) * env;
+				// o += Wave::saw(n.freq*phase*0.504) * env;
+				// o += Wave::saw(n.freq*phase*0.505) * env;
+				// o += Wave::saw(n.freq*phase*0.506) * env;
+				// o += Wave::saw(n.freq*phase*0.507) * env;
+				// o += Wave::saw(n.freq*phase*0.508) * env;
+			}
+
 			o += Wave::tri(n.freq*phase) * env;
-			o += Wave::tri((n.freq + 0.1)*phase) * env;
+			o += Wave::tri((n.freq + 0.5)*phase) * env;
 			out += o/3.0;
 		});
 
-		perc.PlayNotes([&](NoteTimePair& n){
+		perc.PlayNotes([&](const NoteTimePair& n){
 			constexpr f32 attack = 0.1;
 
-			auto env = (perc.time-n.begin)/n.length;
-			if(env < attack){
-				env /= attack;
+			auto pos = (perc.time-n.begin)/n.length;
+			f32 env = 0;
+			if(pos < attack){
+				env = pos/attack;
 			}else{
-				env = (1.0-env)/(1.0-attack);
+				env = (1.0-pos)/(1.0-attack);
 			}
 
 			env *= n.volume;
@@ -404,7 +441,7 @@ void InitFmod(){
 	// http://www.fmod.org/docs/content/generated/FMOD_REVERB_PROPERTIES.html
 
 	FMOD_REVERB_PROPERTIES rprops = {
-		1000.0, //1500.0, /* Reverberation decay time in ms */
+		4000.0, //1500.0, /* Reverberation decay time in ms */
 		10.0, //7.0, /* Initial reflection delay time */
 		11.0, //11.0, /* Late reverberation delay time relative to initial reflection */
 		5000.0, /* Reference high frequency (hz) */
