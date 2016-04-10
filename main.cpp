@@ -41,7 +41,7 @@ struct Schedule {
 		notes.push_back(NoteTimePair{freq, volume, when, length});
 	}
 
-	void Update(f32 dt){
+	void Update(f64 dt){
 		time += dt;
 		if(repeat > 0.0) {
 			if(time >= repeat){
@@ -124,18 +124,18 @@ namespace Wave {
 	}
 
 	f32 saw(f64 phase){
-		return fmod(phase, 2.0)-1.0;
+		return std::fmod(phase, 2.0)-1.0;
 	}
 
-	f32 sqr(f64 phase, f64 width){
-		auto nph = fmod(phase, 1.0);
+	f32 sqr(f64 phase, f64 width = 0.5){
+		auto nph = std::fmod(phase, 1.0);
 		if(nph < width) return -1.0;
 
 		return 1.0;
 	}
 
 	f32 tri(f64 phase){
-		auto nph = fmod(phase, 1.0);
+		auto nph = std::fmod(phase, 1.0);
 		if(nph <= 0.5) return (nph-0.25)*4.0;
 
 		return (0.75-nph)*4.0;
@@ -145,19 +145,6 @@ namespace Wave {
 FMOD::System* fmodSystem;
 FMOD::Channel* channel;
 void InitFmod();
-
-struct vec3 {
-	union {
-		struct {
-			f32 x, y, z;
-		};
-		f32 v[3];
-	};
-
-	operator FMOD_VECTOR() const {
-		return FMOD_VECTOR{x,y,z};
-	}
-};
 
 static void cfmod(FMOD_RESULT result) {
 	if (result != FMOD_OK) {
@@ -172,6 +159,9 @@ Scale penta;
 Scale scale;
 Schedule sched{};
 Schedule perc{};
+Schedule chords{};
+
+constexpr f64 tempo = 120.0;
 
 s32 main(s32, char**){
 	SDL_Init(SDL_INIT_EVERYTHING);
@@ -186,47 +176,41 @@ s32 main(s32, char**){
 	amin.Minor();
 	penta.Penta();
 	scale.Idk();
-	// sched.time = 11.0;
-	// sched.Add(ntof(-12), 0.0, 8.0);
-	// sched.Add(ntof(0), 1.0);
-	// sched.Add(ntof(12), 3.0);
-	// sched.Add(ntof(7), 4.0);
 
-	// sched.Add(ntof(9), 6.0);
-	// sched.Add(ntof(14), 6.0);
-	// sched.Add(ntof(10), 9.0);
-	// sched.Add(ntof(15), 9.0);
+	std::srand(1000);
 
-	// auto chord = [&](auto& scale, s32 root, f32 when){
-	// 	sched.Add(scale.Get(root+0), when+0.0, 3.0);
-	// 	sched.Add(scale.Get(root+2), when+0.1, 3.0);
-	// 	sched.Add(scale.Get(root+4), when+0.2, 3.0);
-	// 	sched.Add(scale.Get(root+6), when+0.3, 3.0);
-	// };
+	auto chord = [&](auto& scale, s32 root, f32 when, f32 vol = 3.f){
+		constexpr f32 length = 3.5f;
 
-	// chord(amaj, 0, 0.0);
-	// chord(amaj, 3, 3.0);
-	// chord(amaj, 1, 6.0);
-	// chord(amaj, 4, 9.0);
+		auto snd = root+1 + (rand()%2);
+		auto trd = root+3 + (rand()%3);
 
-	// chord(amin, 0, 12+0.0);
-	// chord(amin, 3, 12+3.0);
-	// chord(amin, 1, 12+6.0);
-	// chord(amin, 4, 12+9.0);
+		chords.Add(scale.Get(root)*0.5f, when+.00f, length, vol * 0.7f);
+		// chords.Add(scale.Get(snd)*0.5f, when+.00f, length, vol * 0.7f);
 
-	// sched.repeat = 16.0;
-	sched.repeat = 17.0/4.0;
+		chords.Add(scale.Get(root), when+.02f, length, vol);
+		chords.Add(scale.Get(snd), when+.04f, length, vol);
+		chords.Add(scale.Get(trd), when+.06f, length, vol);
+	};
+
+	sched.time = -8.0; // Lead in
+	sched.repeat = 7.5;
+
+	chords.time = sched.time;
+	chords.repeat = 8.0;
 	perc.repeat = 8.0;
 
 	// Kick
 	for(f32 x = 0.0; x < perc.repeat; x+= 1.0){
-		perc.Add(50.0, x, 0.05, 10.0);
+		// perc.Add(50.0, x, 0.05, 10.0);
+		perc.Add(30.0, x, 0.2, 4.0);
 	}
 
 	for(f32 x = 1.0; x < perc.repeat; x+= 2.0){
 		perc.Add(1500.0, x, 0.01, 1.0);
 	}
-	perc.Add(1500.0, 7.75, 0.01, 1.0);
+	// perc.Add(1500.0, 7.75, 0.01, 1.0);
+	// perc.Add(1500.0, 6.75, 0.01, 1.0);
 
 	auto gen = [&](){
 		sched.notes.clear();
@@ -235,8 +219,9 @@ s32 main(s32, char**){
 		for(f32 x = 0.0; x < sched.repeat;){
 			x += std::pow(2.0, (rand()%2));
 			auto freq = penta.Get(rand()%(penta.degrees.size()*1)) * std::pow(2.0, -2.0);
-			sched.Add(freq, x, 2.0/3.0, 4.0);
-			sched.Add(freq*0.5, x+0.75, 2.0/3.0, 4.0);
+			// sched.Add(freq, x, 2.0/3.0, 6.0);
+			sched.Add(freq, x, 1.0, 2.0);
+			// sched.Add(freq*0.5, x+0.75, 2.0/3.0, 6.0);
 		}
 
 		// Mid
@@ -244,28 +229,42 @@ s32 main(s32, char**){
 			x += std::pow(2.0, (rand()%4)-2.0);
 			auto freq = penta.Get(rand()%(penta.degrees.size()*2));
 			auto length = 0.3 * std::pow(2.0, (rand()%3)-1.0);
-			sched.Add(freq, x, length, 2.0);
+			auto vol = ((rand()%1000) - 500)/500.f + 2.0;
+			sched.Add(freq, x, length, vol);
 		}
 
-		// // Treb
+		// Treb
 		for(f32 x = 0.0; x < sched.repeat;){
 			x += std::pow(2.0, (rand()%5)-2.0);
 			auto freq = penta.Get(rand()%(penta.degrees.size()*3)) * std::pow(2.0, 1.0);
 			auto length = 0.1 * std::pow(2.0, (rand()%4)-2.0);
-			sched.Add(freq, x, length);
-			sched.Add(freq, x+1.0/4.0, length);
+			auto vol = ((rand()%1000) - 500)/1000.f + 1.0;
+
+			sched.Add(freq, x, length, vol);
+			sched.Add(freq, x+1.0/4.0, length, vol);
 			// sched.Add(freq, x+2.0/4.0, length);
-		}		
+		}
+	};
+
+	auto genchords = [&]() {
+		chords.notes.clear();
+
+		for(f32 x = 0.f; x < chords.repeat;) {
+			chord(penta, rand()%(penta.degrees.size()*5/4) - penta.degrees.size(), x, 0.8f + (rand()%100 - 50)/300.f);
+			// x += std::pow(2.0, (rand()%2)+2) + (rand()%2)*0.5f;
+			x += (rand()%5)/2.f + 2.f;
+		}
 	};
 
 	gen();
+	genchords();
 
 	bool running = true;
 
 	while(running){
 		SDL_Event e;
 		while(SDL_PollEvent(&e)){
-			if(e.type == SDL_QUIT
+			if (e.type == SDL_QUIT
 			|| (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE)
 			|| (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)){
 				running = false;
@@ -277,6 +276,11 @@ s32 main(s32, char**){
 		if(sched.numRepeats >= 4){
 			gen();
 			sched.numRepeats = 0;
+		}
+
+		if(chords.numRepeats >= 2){
+			genchords();
+			chords.numRepeats = 0;
 		}
 
 		SDL_Delay(10);
@@ -325,6 +329,8 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 
 	for(u32 i = 0; i < length; i++){
 		f32 out = 0.f;
+		f32 outl = 0.f;
+		f32 outr = 0.f;
 		
 		sched.PlayNotes([&](const NoteTimePair& n){
 			constexpr f32 attack = 0.1;
@@ -337,27 +343,40 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 				env = (1.0-pos)/(1.0-attack);
 			}
 
-			env *= n.volume;
-
 			f32 o = 0.0;
 			// o += Wave::sin(n.freq*phase*0.5) * env * 0.2;
-			o += Wave::sin(n.freq*phase*2.0) * env;
+			// o += Wave::sin(n.freq*phase*2.0) * env;
+			f32 mod = Wave::sin(phase*10.f) * .02f;
+			f32 ph = n.freq*phase + mod;
+			f32 a = std::min(1.f, std::max(env*env*env * .5f, 0.f)); //Wave::sin(phase*1.f)*.5f + .5f;
 
-			if(n.freq >= ntof(0)){
-				o += Wave::saw(n.freq*phase*0.5) * env;
-				// o += Wave::saw(n.freq*phase*0.501) * env;
-				// o += Wave::saw(n.freq*phase*0.502) * env;
-				// o += Wave::saw(n.freq*phase*0.503) * env;
-				// o += Wave::saw(n.freq*phase*0.504) * env;
-				// o += Wave::saw(n.freq*phase*0.505) * env;
-				// o += Wave::saw(n.freq*phase*0.506) * env;
-				// o += Wave::saw(n.freq*phase*0.507) * env;
-				// o += Wave::saw(n.freq*phase*0.508) * env;
+			env *= n.volume;
+			o += (Wave::sin(ph) * (1-a) + Wave::sqr(ph*2.f) * a) * env;
+			// o += Wave::sin((n.freq + Wave::tri(phase*6.f) * .01f)*phase) * env;
+			// o += Wave::sin((n.freq + 0.5)*phase) * env;
+			out += o/3.0;
+		});
+
+		chords.PlayNotes([&](const NoteTimePair& n){
+			constexpr f32 attack = 0.005;
+			
+			auto pos = (chords.time-n.begin)/n.length;
+			f32 env;
+			if(pos < attack){
+				env = pos/attack;
+			}else{
+				env = (1.0-pos)/(1.0-attack);
 			}
 
-			o += Wave::tri(n.freq*phase) * env;
-			o += Wave::tri((n.freq + 0.5)*phase) * env;
-			out += o/3.0;
+			f32 mod = Wave::sin(phase*10.f) * .02f;
+			f32 ph = n.freq*phase + mod;
+			f32 a = env*env * .3f + .3f + Wave::sin(phase*6.f) * 0.2f;
+			a = std::min(1.f, std::max(a, 0.f));
+
+			f32 phaseShift = 0.2f + Wave::sin(phase*3.f) * .2f + .5f; //phase / 6.f;
+
+			outl += (Wave::sin(ph) * (1-a) + Wave::tri(ph) * a) * env * n.volume;
+			outr += (Wave::sin(ph + phaseShift) * (1-a) + Wave::tri(ph * 1.01) * a) * env * n.volume;
 		});
 
 		perc.PlayNotes([&](const NoteTimePair& n){
@@ -379,17 +398,17 @@ FMOD_RESULT F_CALLBACK DSPCallback(FMOD_DSP_STATE* dsp_state,
 			out += o;
 		});
 
-		outbuffer[i**outchannels+0] = out;
-		outbuffer[i**outchannels+1] = out;
+		outbuffer[i**outchannels+0] = out + outl/3.f;
+		outbuffer[i**outchannels+1] = out + outr/3.f;
 
 		phase += inc;
-		sched.Update(inc/60.0* 120.0);
-		perc.Update(inc/60.0* 120.0);
+		chords.Update(inc/60.0* tempo);
+		sched.Update(inc/60.0* tempo);
+		perc.Update(inc/60.0* tempo);
 	}
 
 	return FMOD_OK;
 }
-
 
 void InitFmod(){
 	cfmod(FMOD::System_Create(&fmodSystem));
@@ -408,8 +427,8 @@ void InitFmod(){
 
 	FMOD::DSP* dsp;
 	FMOD::DSP* compressor;
-	{
-		FMOD_DSP_DESCRIPTION desc;
+
+	{	FMOD_DSP_DESCRIPTION desc;
 		memset(&desc, 0, sizeof(desc));
 
 		// strncpy(desc.name, "Fuckyou", sizeof(desc.name));
@@ -434,6 +453,7 @@ void InitFmod(){
 	cfmod(mastergroup->addDSP(0, compressor));
 	cfmod(fmodSystem->playDSP(dsp, mastergroup, false, &channel));
 	cfmod(channel->setMode(FMOD_2D));
+	cfmod(channel->setVolume(0.7f));
 
 	FMOD::Reverb3D* reverb;
 	cfmod(fmodSystem->createReverb3D(&reverb));
@@ -441,19 +461,19 @@ void InitFmod(){
 	// http://www.fmod.org/docs/content/generated/FMOD_REVERB_PROPERTIES.html
 
 	FMOD_REVERB_PROPERTIES rprops = {
-		4000.0, //1500.0, /* Reverberation decay time in ms */
-		10.0, //7.0, /* Initial reflection delay time */
-		11.0, //11.0, /* Late reverberation delay time relative to initial reflection */
-		5000.0, /* Reference high frequency (hz) */
-		50.0, /* High-frequency to mid-frequency decay time ratio */
-		100.0, /* Value that controls the echo density in the late reverberation decay. */
-		50.0, //100.0, /* Value that controls the modal density in the late reverberation decay */
-		250.0, /* Reference low frequency (hz) */
-		0.0, /* Relative room effect level at low frequencies */
-		20000.0, /* Relative room effect level at high frequencies */
-		50.0, /* Early reflections level relative to room effect */
-		-5.0, //-6.0, /* Room effect level (at mid frequencies) */
+		.DecayTime			= 8000.0, //1500.0, /* Reverberation decay time in ms */
+		.EarlyDelay			= 7.0, //7.0, /* Initial reflection delay time */
+		.LateDelay			= 11.0, //11.0, /* Late reverberation delay time relative to initial reflection */
+		.HFReference		= 5000.0, /* Reference high frequency (hz) */
+		.HFDecayRatio		= 50.0, /* High-frequency to mid-frequency decay time ratio */
+		.Diffusion			= 60.0, /* Value that controls the echo density in the late reverberation decay. */
+		.Density			= 100.0, //100.0, /* Value that controls the modal density in the late reverberation decay */
+		.LowShelfFrequency	= 250.0, /* Reference low frequency (hz) */
+		.LowShelfGain		= 0.0, /* Relative room effect level at low frequencies */
+		.HighCut			= 10000.0, /* Relative room effect level at high frequencies */
+		.EarlyLateMix		= 50.0, /* Early reflections level relative to room effect */
+		.WetLevel			= -12.0, //-6.0, /* Room effect level (at mid frequencies) */
 	};
 
-	// cfmod(reverb->setProperties(&rprops));
+	cfmod(reverb->setProperties(&rprops));
 }
